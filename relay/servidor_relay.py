@@ -17,6 +17,13 @@ con  /mcp?sala=CODIGO . Todo lo que manda uno le llega al otro.
 
 - El MCP puede conectarse con  /mcp?sala=*  para mandar eventos en modo global:
   todos los juegos con conexión reciben el evento.
+- Con SUPABASE_URL y SUPABASE_SERVICE_KEY:
+    * guarda cada evento de la NASA terminado (resultados_eventos, con puntos) y le manda
+      a la sala el ranking  {"tipo": "ranking", ...};
+    * el juego puede pedir  {"tipo": "pedir_ranking"}  o  {"tipo": "iniciar_dia"}
+      (misiones de la jornada de hoy, iguales para todas las salas);
+    * guarda la jornada terminada (evento "jornada_fin", tabla jornadas, una por sala y día).
+
 Pensado para Render (https://render.com): escucha en el puerto de la variable
 PORT y responde "ok" a las peticiones HTTP normales (revisión de salud).
 
@@ -24,6 +31,7 @@ Probar en tu PC:  pip install websockets  y  python servidor_relay.py
                   (escucha en ws://localhost:10000)
 """
 import asyncio
+import datetime
 import hmac
 import itertools
 import json
@@ -118,14 +126,21 @@ async def atender_juego(ws, codigo: str, sala: dict) -> None:
     broadcast(sala["mcps"] | mcps_globales, estado_sala(sala))
     try:
         async for raw in ws:
-            if isinstance(raw, str) and '"pedir_ranking"' in raw:
+            peticion = _peticion_del_juego(raw)
+            if peticion == "pedir_ranking":
                 # El juego pide el ranking (tecla Tab): se contesta solo a esta sala
                 if SUPABASE_URL and SUPABASE_KEY:
                     asyncio.create_task(enviar_ranking(codigo, None))
                 continue
+            if peticion == "iniciar_dia":
+                # El juego pide las misiones de la jornada de hoy
+                asyncio.create_task(enviar_jornada(codigo))
+                continue
             broadcast(sala["mcps"] | mcps_globales, raw)  # respuestas y eventos van a todos los MCP
             if isinstance(raw, str) and '"evento_nasa_fin"' in raw:
                 asyncio.create_task(guardar_resultado(codigo, raw))
+            elif isinstance(raw, str) and '"jornada_fin"' in raw:
+                asyncio.create_task(guardar_jornada(codigo, raw))
     except ConnectionClosed:
         pass
     finally:
@@ -335,6 +350,126 @@ async def enviar_ranking(codigo: str, puntos_ganados) -> None:
         except ConnectionClosed:
             pass
     broadcast(sala["mcps"], json.dumps({"tipo": "evento", "evento": "ranking", "datos": datos}, ensure_ascii=False))
+
+
+def _peticion_del_juego(raw) -> str:
+    """Peticiones que el juego le hace al relay (no van a los MCP): {"tipo": "pedir_ranking"}
+    o {"tipo": "iniciar_dia"}. Devuelve "" para todo lo demás."""
+    if not isinstance(raw, str) or len(raw) > 200 or '"tipo"' not in raw:
+        return ""
+    try:
+        datos = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
+    tipo = datos.get("tipo") if isinstance(datos, dict) else None
+    return tipo if tipo in ("pedir_ranking", "iniciar_dia") else ""
+
+
+def _hoy_utc() -> datetime.date:
+    return datetime.datetime.now(datetime.timezone.utc).date()
+
+
+def _supabase_json(ruta: str, cuerpo=None, prefer: str = ""):
+    """GET (o POST si hay cuerpo) a la API de Supabase con la clave del relay."""
+    cabeceras = _cabeceras_supabase()
+    if cuerpo is not None:
+        cabeceras["Content-Type"] = "application/json"
+    if prefer:
+        cabeceras["Prefer"] = prefer
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}{ruta}",
+        data=None if cuerpo is None else json.dumps(cuerpo).encode(),
+        method="GET" if cuerpo is None else "POST",
+        headers=cabeceras,
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read() or b"null")
+
+
+async def enviar_jornada(codigo: str) -> None:
+    """Manda al juego de la sala las misiones de hoy (iguales para todas las salas)
+    y si esa sala ya completó la jornada de hoy."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
+    fecha = _hoy_utc().isoformat()
+    try:
+        jornada = await asyncio.to_thread(
+            _supabase_json, "/rest/v1/rpc/jornada_del_dia", {"p_fecha": fecha})
+        previas = await asyncio.to_thread(
+            _supabase_json, f"/rest/v1/jornadas?select=bono,superadas,misiones&sala=eq.{codigo}&fecha=eq.{fecha}")
+    except Exception as e:
+        log.warning("No se pudo armar la jornada: %s", e)
+        return
+    if not isinstance(jornada, dict):
+        return
+    previa = previas[0] if isinstance(previas, list) and previas else None
+    paquete = {"tipo": "jornada", **jornada, "ya_completada": previa is not None, "previa": previa}
+    sala = salas.get(codigo)
+    if sala is None:
+        return
+    if sala["juego"] is not None:
+        try:
+            await sala["juego"].send(json.dumps(paquete, ensure_ascii=False))
+        except ConnectionClosed:
+            pass
+    broadcast(sala["mcps"], json.dumps({"tipo": "evento", "evento": "jornada", "datos": {
+        "fecha": jornada.get("fecha"), "ya_completada": previa is not None,
+        "misiones": [m.get("titulo") for m in jornada.get("misiones", []) if isinstance(m, dict)],
+    }}, ensure_ascii=False))
+    log.info("Jornada %s enviada a la sala %s (%d misiones)", fecha, codigo, len(jornada.get("misiones", [])))
+
+
+async def guardar_jornada(codigo: str, raw: str) -> None:
+    """Guarda en Supabase (tabla jornadas) una jornada terminada: una por sala y por día.
+    El bono lo calcula Supabase. Le avisa al juego el bono y le manda el ranking."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
+    try:
+        paquete = json.loads(raw)
+    except json.JSONDecodeError:
+        return
+    d = paquete.get("datos") if isinstance(paquete, dict) else None
+    if paquete.get("evento") != "jornada_fin" or not isinstance(d, dict):
+        return
+    hoy = _hoy_utc()
+    fecha = str(d.get("fecha", ""))
+    if fecha not in (hoy.isoformat(), (hoy - datetime.timedelta(days=1)).isoformat()):
+        log.warning("Jornada con fecha inválida (%s) en la sala %s", fecha, codigo)
+        return
+    misiones = _entero(d.get("misiones")) or 0
+    superadas = _entero(d.get("superadas")) or 0
+    if not 1 <= misiones <= 8:
+        return
+    superadas = max(0, min(superadas, misiones))
+    fila = {
+        "sala": codigo, "fecha": fecha, "misiones": misiones, "superadas": superadas,
+        "dano_total_pct": max(0.0, min(float(d.get("dano_total_pct") or 0), 1000.0)),
+        "tiempo_seg": float(d["tiempo_seg"]) if isinstance(d.get("tiempo_seg"), (int, float)) else None,
+    }
+    try:
+        guardadas = await asyncio.to_thread(
+            _supabase_json, "/rest/v1/jornadas?on_conflict=sala,fecha&select=bono", fila,
+            "return=representation,resolution=ignore-duplicates")
+    except urllib.error.HTTPError as e:
+        log.warning("Supabase rechazó la jornada: HTTP %s %s", e.code, e.read()[:200])
+        return
+    except Exception as e:
+        log.warning("No se pudo guardar la jornada: %s", e)
+        return
+    repetida = not guardadas
+    bono = None if repetida else (guardadas[0].get("bono") or 0)
+    log.info("Jornada %s de la sala %s: %d/%d, bono %s%s", fecha, codigo, superadas, misiones,
+             bono, " (repetida, no cuenta)" if repetida else "")
+    aviso = {"tipo": "jornada_guardada", "fecha": fecha, "bono": bono, "repetida": repetida}
+    sala = salas.get(codigo)
+    if sala is not None:
+        if sala["juego"] is not None:
+            try:
+                await sala["juego"].send(json.dumps(aviso))
+            except ConnectionClosed:
+                pass
+        broadcast(sala["mcps"], json.dumps({"tipo": "evento", "evento": "jornada_guardada", "datos": aviso}))
+    await enviar_ranking(codigo, bono)
 
 
 async def main() -> None:

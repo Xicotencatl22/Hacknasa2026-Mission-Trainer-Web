@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import JornadaHoy from './JornadaHoy'
 
 // Ranking de salas: sale de la vista pública `ranking_salas` de Supabase, que llena el
 // relay con cada evento de la NASA que termina en el juego. La clave publicable solo
@@ -12,6 +13,7 @@ const REFRESCO_MS = 30_000
 interface FilaRanking {
   sala: string
   puntos: number
+  jornadas: number
   superados: number
   jugados: number
   mejor_tiempo_seg: string | number | null
@@ -71,11 +73,13 @@ export default function Ranking() {
           ¿Quién resiste mejor el clima espacial?
         </h2>
         <p className="section-lead">
-          Cada evento real de la NASA que termina en el juego suma puntos: más por superarlo, por la dificultad y la severidad, y por repararlo rápido; el daño resta. Juega con
+          Cada evento real de la NASA que termina en el juego suma puntos: más por superarlo, por la dificultad y la severidad, y por repararlo rápido; el daño resta. Completar la jornada del día da un bono extra. Juega con
           <code className="ranking-code">?sala=TU_NOMBRE</code> al final de la dirección para
           aparecer en la tabla.
         </p>
       </div>
+
+      <JornadaHoy />
 
       <div className="ranking glass">
         {estado.tipo === 'cargando' && <p className="ranking-vacio">Cargando el ranking…</p>}
@@ -93,6 +97,7 @@ export default function Ranking() {
                 <th scope="col">Sala</th>
                 <th scope="col" className="num">Puntos</th>
                 <th scope="col" className="num">Superados</th>
+                <th scope="col" className="num">Jornadas</th>
                 <th scope="col" className="num">Jugados</th>
                 <th scope="col" className="num">Mejor reparación</th>
                 <th scope="col" className="num">Daño promedio</th>
@@ -109,6 +114,7 @@ export default function Ranking() {
                     <td className="ranking-sala">{fila.sala}</td>
                     <td className="num ranking-puntos">{(fila.puntos ?? 0).toLocaleString('es-MX')}</td>
                     <td className="num">{fila.superados}</td>
+                    <td className="num">{fila.jornadas ?? 0}</td>
                     <td className="num">{fila.jugados}</td>
                     <td className="num">{tiempo === null ? '—' : `${tiempo.toFixed(1)} s`}</td>
                     <td className="num">{dano === null ? '—' : `${dano.toFixed(1)} %`}</td>
