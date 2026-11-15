@@ -12,3 +12,11 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Clave para /difusion (la genera Render; cópiala al .env del listener)
+      - key: DIFUSION_CLAVE
+        generateValue: true
+      # Para guardar resultados en Supabase (ranking de la página)
+      - key: SUPABASE_URL
+        value: https://nsaeswvffgfxueftnqda.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false   # secreta: se pega a mano en el panel de Render

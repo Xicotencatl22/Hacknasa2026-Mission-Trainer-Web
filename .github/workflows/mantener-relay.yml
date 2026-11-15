@@ -1,0 +1,18 @@
+name: Mantener despierto el relay
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Visitar el relay
+        run: |
+          for intento in 1 2 3; do
+            curl -fsS --max-time 60 https://mission-trainer-relay.onrender.com/ && exit 0
+            sleep 10
+          done
+          exit 1

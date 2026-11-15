@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Ranking from './Ranking'
 
 const GAME_URL = `${import.meta.env.BASE_URL}juego.html${window.location.search}`
 
@@ -10,13 +11,14 @@ interface IconProps {
 const NAV_ITEMS = [
   { href: '#proyecto', label: 'Proyecto' },
   { href: '#como-jugar', label: 'Cómo jugar' },
+  { href: '#ranking', label: 'Ranking' },
 ]
 
 const FACTS = [
   { label: 'Motor', value: 'Godot' },
   { label: 'Renderizado', value: 'WebGL 2.0' },
   { label: 'Distribución', value: 'Web' },
-  { label: 'Primera carga', value: '≈ 125 MB' },
+  { label: 'Primera carga', value: '≈ 58 MB' },
 ]
 
 const STEPS = [
@@ -26,7 +28,7 @@ const STEPS = [
   },
   {
     title: 'Espera la primera carga',
-    body: 'El motor descarga unos 125 MB. Las siguientes partidas usan la caché del navegador.',
+    body: 'El motor descarga unos 58 MB. Las siguientes partidas usan la caché del navegador.',
   },
   {
     title: 'Juega y vuelve',
@@ -148,7 +150,7 @@ export default function App() {
                 </span>
                 <span className="meta-chip">
                   <Icon><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></Icon>
-                  ≈ 125 MB
+                  ≈ 58 MB
                 </span>
               </div>
             </div>
@@ -295,6 +297,8 @@ export default function App() {
             </a>
           </div>
         </section>
+
+        <Ranking />
       </main>
 
       <footer className="site-foot shell">
