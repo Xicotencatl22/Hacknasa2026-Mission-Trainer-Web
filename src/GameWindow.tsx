@@ -184,7 +184,7 @@ export default function GameWindow({ onClose }: GameWindowProps) {
             className="game-frame"
             src={GAME_URL}
             title="Test1 — juego"
-            allow="fullscreen; autoplay; gamepad; pointer-lock"
+            allow="fullscreen; autoplay; gamepad; pointer-lock; local-network-access; local-network; loopback-network"
             allowFullScreen
             onLoad={() => setLoaded(true)}
           />
