@@ -116,7 +116,7 @@ export default function App() {
                 <span className="eyebrow-dot" aria-hidden="true" />
                 Presentación del proyecto
               </p>
-              <h1 className="hero-title" id="game-title">Test1</h1>
+              <h1 className="hero-title" id="game-title">Mision Trainer</h1>
               <p className="hero-lead">
                 Una experiencia jugable creada con Godot y exportada para la web.
                 Todo ocurre en tu navegador, sin instalaciones y sin salir de la pestaña.
@@ -161,7 +161,7 @@ export default function App() {
                     <i />
                     <i />
                   </span>
-                  <span className="stage-chrome-label">test1.juego</span>
+                  <span className="stage-chrome-label">mision-trainer.juego</span>
                   <span className="stage-status">
                     <i />
                     Listo
@@ -173,7 +173,7 @@ export default function App() {
                     <PlayIcon />
                   </span>
                   <span className="stage-kicker" aria-hidden="true">Godot web export</span>
-                  <span className="stage-title">Entra en Test1</span>
+                  <span className="stage-title">Entra en Mision Trainer</span>
                   <span className="stage-caption" aria-hidden="true">WebGL 2.0 · Una sola pestaña</span>
                   <span className="sr-only">, abrir el juego en esta pestaña</span>
                 </span>
@@ -206,7 +206,7 @@ export default function App() {
               Pequeño, directo y hecho para la web.
             </h2>
             <p className="section-lead">
-              Test1 es una pieza experimental que lleva un proyecto de Godot al navegador
+              Mision Trainer es una pieza experimental que lleva un proyecto de Godot al navegador
               sin pasar por una tienda ni por un instalador.
             </p>
           </div>
@@ -290,7 +290,7 @@ export default function App() {
             </div>
             <a className="btn btn-primary" href={GAME_URL}>
               <PlayIcon />
-              Abrir Test1
+              Abrir Mision Trainer
               <ArrowIcon />
             </a>
           </div>
@@ -300,7 +300,7 @@ export default function App() {
       <footer className="site-foot shell">
         <div className="foot-brand">
           <BrandMark />
-          <span>Test1 · Godot Web Export</span>
+          <span>Mision Trainer · Godot Web Export</span>
         </div>
         <div className="foot-meta">
           <span>Hecho para jugar en el navegador</span>

@@ -14,6 +14,9 @@ con  /mcp?sala=CODIGO . Todo lo que manda uno le llega al otro.
 - Si un servidor MCP manda un comando y no hay juego en la sala, el relay
   responde con un error en lugar de dejarlo esperando.
 
+- El MCP puede conectarse con  /mcp?sala=*  para mandar eventos en modo global:
+  todos los juegos con conexión reciben el evento.
+
 Pensado para Render (https://render.com): escucha en el puerto de la variable
 PORT y responde "ok" a las peticiones HTTP normales (revisión de salud).
 
@@ -35,12 +38,15 @@ from websockets.exceptions import ConnectionClosed
 PUERTO = int(os.environ.get("PORT", "10000"))
 MAX_SALAS = 500
 SALA_VALIDA = re.compile(r"[A-Za-z0-9_-]{3,40}")
+SALA_GLOBAL = "*"  # código especial: /mcp?sala=* → modo global (eventos a todas las salas)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("relay")
 
 # sala -> {"juego": conexión o None, "mcps": set de conexiones}
 salas: dict[str, dict] = {}
+# MCPs conectados en modo global (sala=*)
+mcps_globales: set = set()
 
 
 def salud(conexion, peticion):
@@ -69,7 +75,10 @@ async def manejar(ws) -> None:
     if rol not in ("juego", "mcp"):
         await ws.close(1008, "Usa /juego?sala=CODIGO o /mcp?sala=CODIGO")
         return
-    if not SALA_VALIDA.fullmatch(codigo):
+    if codigo == SALA_GLOBAL and rol != "mcp":
+        await ws.close(1008, "El código global solo lo usan los MCP (/mcp?sala=*)")
+        return
+    if codigo != SALA_GLOBAL and not SALA_VALIDA.fullmatch(codigo):
         await ws.close(1008, "Código de sala inválido (3 a 40 letras, números, - o _)")
         return
     if codigo not in salas and len(salas) >= MAX_SALAS:
@@ -92,20 +101,56 @@ async def atender_juego(ws, codigo: str, sala: dict) -> None:
     log.info("Juego entró a la sala %s", codigo)
     if anterior is not None:
         await anterior.close(4000, "Otro juego entró a esta sala")
-    broadcast(sala["mcps"], estado_sala(sala))
+    broadcast(sala["mcps"] | mcps_globales, estado_sala(sala))
     try:
         async for raw in ws:
-            broadcast(sala["mcps"], raw)  # respuestas y eventos van a todos los MCP
+            broadcast(sala["mcps"] | mcps_globales, raw)  # respuestas y eventos van a todos los MCP
     except ConnectionClosed:
         pass
     finally:
         if sala["juego"] is ws:
             sala["juego"] = None
-            broadcast(sala["mcps"], estado_sala(sala))
+            broadcast(sala["mcps"] | mcps_globales, estado_sala(sala))
         log.info("Juego salió de la sala %s", codigo)
 
 
+async def responder_sin_juego(ws, raw: str, codigo: str) -> None:
+    """Si no hay juego en la sala, contestamos con un error en lugar de dejar el comando esperando."""
+    try:
+        datos = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return
+    if isinstance(datos, dict) and "id" in datos:
+        await ws.send(json.dumps({
+            "id": datos["id"],
+            "ok": False,
+            "error": f"No hay ningún juego en la sala '{codigo}'. Abre el juego "
+                     f"agregando ?sala={codigo} al final de la dirección.",
+        }, ensure_ascii=False))
+
+
 async def atender_mcp(ws, codigo: str, sala: dict) -> None:
+    if codigo == SALA_GLOBAL:
+        mcps_globales.add(ws)
+        log.info("Servidor MCP en modo global")
+        try:
+            await ws.send(estado_sala(sala))
+            async for raw in ws:
+                juegos = [s["juego"] for s in salas.values() if s["juego"] is not None]
+                if not juegos:
+                    await responder_sin_juego(ws, raw, codigo)
+                    continue
+                for juego in juegos:
+                    try:
+                        await juego.send(raw)
+                    except ConnectionClosed:
+                        pass
+        except ConnectionClosed:
+            pass
+        finally:
+            mcps_globales.discard(ws)
+            log.info("Servidor MCP salió del modo global")
+        return
     sala["mcps"].add(ws)
     log.info("Servidor MCP entró a la sala %s", codigo)
     try:
@@ -118,18 +163,7 @@ async def atender_mcp(ws, codigo: str, sala: dict) -> None:
                     continue
                 except ConnectionClosed:
                     pass
-            # No hay juego: si era un comando, contestamos con un error.
-            try:
-                datos = json.loads(raw)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(datos, dict) and "id" in datos:
-                await ws.send(json.dumps({
-                    "id": datos["id"],
-                    "ok": False,
-                    "error": f"No hay ningún juego en la sala '{codigo}'. Abre el juego "
-                             f"agregando ?sala={codigo} al final de la dirección.",
-                }, ensure_ascii=False))
+            await responder_sin_juego(ws, raw, codigo)
     except ConnectionClosed:
         pass
     finally:
