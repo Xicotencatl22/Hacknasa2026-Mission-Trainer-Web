@@ -256,6 +256,21 @@ def _entero(v):
     return None
 
 
+def _fecha_valida(v):
+    """"2026-11-14 22:15 UTC" -> ISO para Supabase. Textos como "Simulacro" -> None
+    (si se mandan tal cual, Supabase rechaza toda la fila)."""
+    if not isinstance(v, str) or not v.strip():
+        return None
+    texto = v.strip().removesuffix("UTC").strip().replace("Z", "+00:00")
+    try:
+        f = datetime.datetime.fromisoformat(texto)
+    except ValueError:
+        return None
+    if f.tzinfo is None:
+        f = f.replace(tzinfo=datetime.timezone.utc)
+    return f.isoformat()
+
+
 async def guardar_resultado(codigo: str, raw: str) -> None:
     """Guarda en Supabase (tabla resultados_eventos) el resultado de un evento de la NASA."""
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -275,7 +290,7 @@ async def guardar_resultado(codigo: str, raw: str) -> None:
         "tipo": tipo,
         "intensidad": (str(d.get("intensidad") or "")[:40]) or None,
         "evento_id": _entero(d.get("evento_id")),
-        "fecha_evento": d.get("fecha") or None,
+        "fecha_evento": _fecha_valida(d.get("fecha")),
         "dificultad": (str(d.get("dificultad") or "")[:20]) or None,
         "severidad": _entero(d.get("severidad")),
         "resultado": d["resultado"],
