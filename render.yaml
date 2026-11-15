@@ -1,0 +1,14 @@
+# Servidor intermedio (relay) para conectar el juego con el MCP desde cualquier dispositivo.
+# En Render: New -> Blueprint -> elige este repositorio.
+services:
+  - type: web
+    name: mission-trainer-relay
+    runtime: python
+    plan: free
+    rootDir: relay
+    buildCommand: pip install -r requirements.txt
+    startCommand: python servidor_relay.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
