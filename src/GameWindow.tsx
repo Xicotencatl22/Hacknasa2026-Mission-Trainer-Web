@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
-const GAME_URL = `${import.meta.env.BASE_URL}juego.html`
+// Pasa los parámetros de la página (p. ej. ?mcp=1) al juego dentro del iframe
+const GAME_URL = `${import.meta.env.BASE_URL}juego.html${window.location.search}`
 
 interface IconProps {
   children: ReactNode
