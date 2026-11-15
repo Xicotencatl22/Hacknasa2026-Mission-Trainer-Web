@@ -1,7 +1,32 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Ranking from './Ranking'
 
-const GAME_URL = `${import.meta.env.BASE_URL}juego.html${window.location.search}`
+const GAME_BASE = `${import.meta.env.BASE_URL}juego.html`
+const SALA_GUARDADA = 'project-astra-sala'
+
+// Código de sala: 3 a 40 letras, números, - o _ (lo mismo que acepta el juego y el relay).
+function limpiarSala(texto: string): string {
+  return texto.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40)
+}
+
+function salaInicial(): string {
+  const deUrl = new URLSearchParams(window.location.search).get('sala')
+  if (deUrl) return limpiarSala(deUrl)
+  try {
+    return limpiarSala(window.localStorage.getItem(SALA_GUARDADA) ?? '')
+  } catch {
+    return ''
+  }
+}
+
+// Dirección del juego: conserva los demás parámetros (por ejemplo ?mcp=1) y pone la sala.
+function urlDelJuego(sala: string): string {
+  const params = new URLSearchParams(window.location.search)
+  if (sala.length >= 3) params.set('sala', sala)
+  else params.delete('sala')
+  const query = params.toString()
+  return query ? `${GAME_BASE}?${query}` : GAME_BASE
+}
 
 interface IconProps {
   children: ReactNode
@@ -83,6 +108,19 @@ function BrandMark() {
 }
 
 export default function App() {
+  const [sala, setSala] = useState(salaInicial)
+  const salaValida = sala.length >= 3
+  const GAME_URL = urlDelJuego(sala)
+
+  useEffect(() => {
+    try {
+      if (sala) window.localStorage.setItem(SALA_GUARDADA, sala)
+      else window.localStorage.removeItem(SALA_GUARDADA)
+    } catch {
+      // sin almacenamiento disponible: la sala solo dura mientras la página esté abierta
+    }
+  }, [sala])
+
   return (
     <div className="page">
       <header className="site-header glass">
@@ -90,7 +128,7 @@ export default function App() {
           <a className="brand" href="#inicio">
             <BrandMark />
             <span className="brand-copy">
-              <span className="brand-name">Arcade</span>
+              <span className="brand-name">Project Astra</span>
               <span className="brand-sub">Godot web export</span>
             </span>
           </a>
@@ -118,11 +156,35 @@ export default function App() {
                 <span className="eyebrow-dot" aria-hidden="true" />
                 Presentación del proyecto
               </p>
-              <h1 className="hero-title" id="game-title">Mision Trainer</h1>
+              <h1 className="hero-title" id="game-title">Project Astra</h1>
               <p className="hero-lead">
                 Una experiencia jugable creada con Godot y exportada para la web.
                 Todo ocurre en tu navegador, sin instalaciones y sin salir de la pestaña.
               </p>
+
+              <div className="sala-campo">
+                <label className="sala-label" htmlFor="sala">
+                  Sala <span className="sala-opcional">(opcional)</span>
+                </label>
+                <input
+                  id="sala"
+                  className="sala-input"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="por ejemplo: xico"
+                  maxLength={40}
+                  value={sala}
+                  onChange={(e) => setSala(limpiarSala(e.target.value))}
+                  aria-describedby="sala-ayuda"
+                />
+                <p className="sala-ayuda" id="sala-ayuda">
+                  {sala.length === 0 && 'Sin sala juegas la misión de entrenamiento. Con sala entras a la jornada diaria y al ranking.'}
+                  {sala.length > 0 && !salaValida && 'Escribe al menos 3 caracteres (letras, números, - o _).'}
+                  {salaValida && `Entrarás a la sala «${sala}»: jornada diaria, eventos en vivo y ranking.`}
+                </p>
+              </div>
 
               <div className="hero-actions">
                 <a className="btn btn-primary" href={GAME_URL}>
@@ -163,7 +225,7 @@ export default function App() {
                     <i />
                     <i />
                   </span>
-                  <span className="stage-chrome-label">mision-trainer.juego</span>
+                  <span className="stage-chrome-label">project-astra.juego</span>
                   <span className="stage-status">
                     <i />
                     Listo
@@ -175,7 +237,7 @@ export default function App() {
                     <PlayIcon />
                   </span>
                   <span className="stage-kicker" aria-hidden="true">Godot web export</span>
-                  <span className="stage-title">Entra en Mision Trainer</span>
+                  <span className="stage-title">Entra en Project Astra</span>
                   <span className="stage-caption" aria-hidden="true">WebGL 2.0 · Una sola pestaña</span>
                   <span className="sr-only">, abrir el juego en esta pestaña</span>
                 </span>
@@ -208,7 +270,7 @@ export default function App() {
               Pequeño, directo y hecho para la web.
             </h2>
             <p className="section-lead">
-              Mision Trainer es una pieza experimental que lleva un proyecto de Godot al navegador
+              Project Astra es una pieza experimental que lleva un proyecto de Godot al navegador
               sin pasar por una tienda ni por un instalador.
             </p>
           </div>
@@ -292,7 +354,7 @@ export default function App() {
             </div>
             <a className="btn btn-primary" href={GAME_URL}>
               <PlayIcon />
-              Abrir Mision Trainer
+              Abrir Project Astra
               <ArrowIcon />
             </a>
           </div>
@@ -304,7 +366,7 @@ export default function App() {
       <footer className="site-foot shell">
         <div className="foot-brand">
           <BrandMark />
-          <span>Mision Trainer · Godot Web Export</span>
+          <span>Project Astra · Godot Web Export</span>
         </div>
         <div className="foot-meta">
           <span>Hecho para jugar en el navegador</span>

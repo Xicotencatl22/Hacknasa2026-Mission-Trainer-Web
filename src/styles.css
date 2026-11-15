@@ -1190,3 +1190,50 @@ main {
   color: var(--faint);
   font-size: 13px;
 }
+
+/* ---- Campo de sala (src/App.tsx) ---- */
+.sala-campo {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+  margin: 0 0 18px;
+}
+
+.sala-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.sala-opcional {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.sala-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass-strong);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sala-input::placeholder {
+  color: var(--faint);
+}
+
+.sala-input:focus {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.sala-ayuda {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}

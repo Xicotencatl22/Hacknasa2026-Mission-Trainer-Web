@@ -1,5 +1,5 @@
 """
-Relay de Mission Trainer: conecta el juego con el servidor MCP desde cualquier
+Relay de Project Astra: conecta el juego con el servidor MCP desde cualquier
 dispositivo, a través de internet.
 
     Juego (navegador, cualquier dispositivo) --wss--> relay <--wss-- servidor_mcp.py (PC con Claude)
@@ -72,7 +72,7 @@ def salud(conexion, peticion):
     """Las peticiones que no son WebSocket (navegador, revisión de salud de Render)
     reciben un simple "ok"."""
     if peticion.headers.get("Upgrade", "").lower() != "websocket":
-        return conexion.respond(HTTPStatus.OK, "Mission Trainer relay: ok\n")
+        return conexion.respond(HTTPStatus.OK, "Project Astra relay: ok\n")
     return None
 
 

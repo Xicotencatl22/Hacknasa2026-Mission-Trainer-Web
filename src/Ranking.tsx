@@ -73,9 +73,8 @@ export default function Ranking() {
           ¿Quién resiste mejor el clima espacial?
         </h2>
         <p className="section-lead">
-          Cada evento real de la NASA que termina en el juego suma puntos: más por superarlo, por la dificultad y la severidad, y por repararlo rápido; el daño resta. Completar la jornada del día da un bono extra. Juega con
-          <code className="ranking-code">?sala=TU_NOMBRE</code> al final de la dirección para
-          aparecer en la tabla.
+          Cada evento real de la NASA que termina en el juego suma puntos: más por superarlo, por la dificultad y la severidad, y por repararlo rápido; el daño resta. Completar la jornada del día da un bono extra. Escribe el nombre de tu
+          sala arriba, junto a «Jugar ahora», para aparecer en la tabla.
         </p>
       </div>
 
