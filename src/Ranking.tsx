@@ -6,11 +6,12 @@ import { useEffect, useState } from 'react'
 const SUPABASE_URL = 'https://nsaeswvffgfxueftnqda.supabase.co'
 const SUPABASE_KEY = 'sb_publishable_NlUgFetEGekxx4395OD_Kg_YGt6Emxg'
 const CONSULTA =
-  '/rest/v1/ranking_salas?select=*&jugados=gt.0&order=superados.desc,mejor_tiempo_seg.asc.nullslast&limit=10'
+  '/rest/v1/ranking_salas?select=*&jugados=gt.0&order=puntos.desc,mejor_tiempo_seg.asc.nullslast&limit=10'
 const REFRESCO_MS = 30_000
 
 interface FilaRanking {
   sala: string
+  puntos: number
   superados: number
   jugados: number
   mejor_tiempo_seg: string | number | null
@@ -70,7 +71,7 @@ export default function Ranking() {
           ¿Quién resiste mejor el clima espacial?
         </h2>
         <p className="section-lead">
-          Cada evento real de la NASA que termina en el juego suma aquí. Juega con
+          Cada evento real de la NASA que termina en el juego suma puntos: más por superarlo, por la dificultad y la severidad, y por repararlo rápido; el daño resta. Juega con
           <code className="ranking-code">?sala=TU_NOMBRE</code> al final de la dirección para
           aparecer en la tabla.
         </p>
@@ -90,6 +91,7 @@ export default function Ranking() {
               <tr>
                 <th scope="col">#</th>
                 <th scope="col">Sala</th>
+                <th scope="col" className="num">Puntos</th>
                 <th scope="col" className="num">Superados</th>
                 <th scope="col" className="num">Jugados</th>
                 <th scope="col" className="num">Mejor reparación</th>
@@ -105,6 +107,7 @@ export default function Ranking() {
                   <tr key={fila.sala}>
                     <td className="ranking-pos">{i + 1}</td>
                     <td className="ranking-sala">{fila.sala}</td>
+                    <td className="num ranking-puntos">{(fila.puntos ?? 0).toLocaleString('es-MX')}</td>
                     <td className="num">{fila.superados}</td>
                     <td className="num">{fila.jugados}</td>
                     <td className="num">{tiempo === null ? '—' : `${tiempo.toFixed(1)} s`}</td>

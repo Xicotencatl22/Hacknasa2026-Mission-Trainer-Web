@@ -1100,3 +1100,8 @@ main {
     padding: 12px 10px;
   }
 }
+
+.ranking-puntos {
+  font-weight: 700;
+  color: var(--accent-strong);
+}

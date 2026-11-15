@@ -54,6 +54,7 @@ RESULTADOS_QUE_CUENTAN = {"superado", "fallado", "con_danos"}
 
 # sala -> {"juego": conexión o None, "mcps": set de conexiones}
 salas: dict[str, dict] = {}
+_ids_difusion = itertools.count(1)
 # MCPs conectados en modo global (sala=*)
 mcps_globales: set = set()
 
@@ -117,7 +118,14 @@ async def atender_juego(ws, codigo: str, sala: dict) -> None:
     broadcast(sala["mcps"] | mcps_globales, estado_sala(sala))
     try:
         async for raw in ws:
+            if isinstance(raw, str) and '"pedir_ranking"' in raw:
+                # El juego pide el ranking (tecla Tab): se contesta solo a esta sala
+                if SUPABASE_URL and SUPABASE_KEY:
+                    asyncio.create_task(enviar_ranking(codigo, None))
+                continue
             broadcast(sala["mcps"] | mcps_globales, raw)  # respuestas y eventos van a todos los MCP
+            if isinstance(raw, str) and '"evento_nasa_fin"' in raw:
+                asyncio.create_task(guardar_resultado(codigo, raw))
     except ConnectionClosed:
         pass
     finally:
@@ -259,28 +267,74 @@ async def guardar_resultado(codigo: str, raw: str) -> None:
         "dano_recibido_pct": float(d.get("dano_recibido_pct") or 0),
         "tiempo_usado_seg": float(d["tiempo_usado_seg"]) if isinstance(d.get("tiempo_usado_seg"), (int, float)) else None,
         "reparaciones": len(d.get("problemas") or []) if tipo in ("CME", "GST") else 0,
+        "duracion_seg": float(d["duracion_seg"]) if isinstance(d.get("duracion_seg"), (int, float)) and d["duracion_seg"] > 0 else None,
     }
-    def enviar() -> int:
+    def enviar() -> dict:
         req = urllib.request.Request(
-            f"{SUPABASE_URL}/rest/v1/resultados_eventos",
+            f"{SUPABASE_URL}/rest/v1/resultados_eventos?select=puntos",
             data=json.dumps(fila).encode(),
             method="POST",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
+            headers=_cabeceras_supabase() | {
                 "Content-Type": "application/json",
-                "Prefer": "return=minimal",
+                "Prefer": "return=representation",
             },
         )
         with urllib.request.urlopen(req, timeout=10) as r:
-            return r.status
+            filas = json.loads(r.read() or b"[]")
+            return filas[0] if filas else {}
     try:
-        estado = await asyncio.to_thread(enviar)
-        log.info("Resultado guardado (sala %s, %s %s): HTTP %s", codigo, tipo, fila["resultado"], estado)
+        guardada = await asyncio.to_thread(enviar)
+        log.info("Resultado guardado (sala %s, %s %s): %s pts", codigo, tipo, fila["resultado"], guardada.get("puntos"))
     except urllib.error.HTTPError as e:
         log.warning("Supabase rechazó el resultado: HTTP %s %s", e.code, e.read()[:200])
+        return
     except Exception as e:
         log.warning("No se pudo guardar el resultado: %s", e)
+        return
+    await enviar_ranking(codigo, guardada.get("puntos"))
+
+
+def _cabeceras_supabase() -> dict:
+    return {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+
+
+def leer_ranking() -> list:
+    """Todas las salas ordenadas por puntos (máximo 500, igual que MAX_SALAS)."""
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}/rest/v1/ranking_salas?select=sala,puntos,superados,jugados,mejor_tiempo_seg"
+        "&jugados=gt.0&order=puntos.desc,mejor_tiempo_seg.asc.nullslast&limit=500",
+        headers=_cabeceras_supabase(),
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read() or b"[]")
+
+
+async def enviar_ranking(codigo: str, puntos_ganados) -> None:
+    """Manda al juego de la sala (y a sus MCP) el top 10 y su posición.
+    Va sin "id", así que un juego que todavía no muestra el ranking simplemente lo ignora."""
+    try:
+        todas = await asyncio.to_thread(leer_ranking)
+    except Exception as e:
+        log.warning("No se pudo leer el ranking: %s", e)
+        return
+    filas = [
+        {"pos": i + 1, "sala": f.get("sala"), "puntos": f.get("puntos") or 0,
+         "superados": f.get("superados") or 0, "jugados": f.get("jugados") or 0,
+         "mejor_tiempo_seg": f.get("mejor_tiempo_seg")}
+        for i, f in enumerate(todas)
+    ]
+    propia = next((f for f in filas if f["sala"] == codigo), None)
+    datos = {"tu_sala": codigo, "puntos_ganados": puntos_ganados, "tu_posicion": propia,
+             "total_salas": len(filas), "top": filas[:10]}
+    sala = salas.get(codigo)
+    if sala is None:
+        return
+    if sala["juego"] is not None:
+        try:
+            await sala["juego"].send(json.dumps({"tipo": "ranking", **datos}, ensure_ascii=False))
+        except ConnectionClosed:
+            pass
+    broadcast(sala["mcps"], json.dumps({"tipo": "evento", "evento": "ranking", "datos": datos}, ensure_ascii=False))
 
 
 async def main() -> None:
